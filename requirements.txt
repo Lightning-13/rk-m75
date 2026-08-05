@@ -1,0 +1,4 @@
+pyusb
+libusb-package
+rich
+construct
