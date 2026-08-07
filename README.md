@@ -53,9 +53,9 @@ The next milestone is generating RGB Feature Reports directly from Python withou
 - [x] HID device discovery
 - [x] HID transport layer
 - [x] Feature Report replay
-- [ ] Native packet generation
-- [ ] Frame abstraction
-- [ ] Packet builder
+- [x] Native packet generation
+- [x] Frame abstraction
+- [x] Packet builder
 - [ ] Key mapping
 - [ ] Animation framework
 - [ ] Linux support
