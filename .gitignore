@@ -21,3 +21,6 @@ reports/*
 # OS
 .DS_Store
 Thumbs.db
+
+captures/report9.bin
+captures/report9.hex
