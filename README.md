@@ -1,12 +1,12 @@
 # RK M75
 
-An open-source Python library for controlling the RGB lighting on the Royal Kludge RK M75 keyboard without the official Windows software.
+An open-source Python library for controlling the RGB lighting on the Royal Kludge RK M75 keyboard over USB HID without the official Windows software.
 
-> **Status:** Reverse engineered and capable of replaying RGB Feature Reports. Native packet generation is currently under development.
+> **Status:** Reverse engineered and capable of generating RGB Feature Reports entirely from Python. Logical per-key lighting support is now under active development.
 
 ---
 
-## Goals
+# Goals
 
 - Control RK M75 RGB lighting from Python
 - Support Windows and Linux
@@ -16,24 +16,41 @@ An open-source Python library for controlling the RGB lighting on the Royal Klud
 
 ---
 
-## Current Capabilities
+# Current Capabilities
 
-The current implementation has been validated against a real RK M75 keyboard.
+The implementation has been validated against a real Royal Kludge RK M75 keyboard.
 
 The library can currently:
 
 - Discover the vendor RGB HID interface
 - Open the correct HID collection
-- Replay captured RGB Feature Reports
-- Successfully change keyboard lighting from Python
+- Generate RGB Feature Reports entirely from Python
+- Control keyboard lighting without the official software
+- Control verified individual keys through a logical API
 
-The next milestone is generating RGB Feature Reports directly from Python without relying on captured packets.
+Current development focuses on expanding the verified key map and building higher-level lighting features.
 
 ---
 
-## Current Status
+# Example
 
-### Reverse Engineering
+```python
+from rkm75 import Frame, RKM75
+
+frame = Frame()
+
+frame.fill((255, 0, 0))
+frame.set_key("A", (0, 255, 0))
+
+with RKM75() as keyboard:
+    keyboard.send(frame)
+```
+
+---
+
+# Current Status
+
+## Reverse Engineering
 
 - [x] Identified USB transport
 - [x] Located RGB Feature Report
@@ -44,11 +61,13 @@ The next milestone is generating RGB Feature Reports directly from Python withou
 - [x] Identified status packet type (`0x0B`)
 - [x] Located RGB framebuffer
 - [x] Confirmed framebuffer updates using controlled captures
-- [x] Confirmed no checksum or sequence counter in lighting packets
+- [x] Confirmed no checksum or sequence counter
 - [x] Confirmed vendor HID collection (`MI_01`, Usage Page `0xFF02`)
-- [x] Successfully replayed a captured RGB Feature Report to the keyboard
+- [x] Successfully replayed captured Feature Reports
+- [x] Successfully generated Feature Reports entirely from Python
+- [x] Verified logical key mappings (`A`, `Space`)
 
-### Implementation
+## Implementation
 
 - [x] HID device discovery
 - [x] HID transport layer
@@ -56,9 +75,11 @@ The next milestone is generating RGB Feature Reports directly from Python withou
 - [x] Native packet generation
 - [x] Frame abstraction
 - [x] Packet builder
-- [ ] Key mapping
+- [x] Logical key API
+- [ ] Complete key map
 - [ ] Animation framework
 - [ ] Linux support
+- [ ] Public API stabilization
 
 ---
 
@@ -66,7 +87,7 @@ The next milestone is generating RGB Feature Reports directly from Python withou
 
 ```
 captures/       Wireshark captures used during reverse engineering
-docs/           Protocol documentation
+docs/           Protocol documentation and findings
 examples/       Example programs
 reports/        Generated analysis output (ignored by Git)
 rkm75/          Python library
@@ -76,7 +97,7 @@ tools/          Reverse-engineering utilities
 
 ---
 
-# Project Architecture
+# Architecture
 
 ```
                 +----------------------+
@@ -85,7 +106,7 @@ tools/          Reverse-engineering utilities
                            |
                            v
                 +----------------------+
-                |        RKM75         |
+                |        Frame         |
                 +----------------------+
                            |
                            v
@@ -102,6 +123,11 @@ tools/          Reverse-engineering utilities
                 +----------------------+
                 | USB HID Feature Report|
                 +----------------------+
+                           |
+                           v
+                +----------------------+
+                |       RK M75         |
+                +----------------------+
 ```
 
 ---
@@ -115,25 +141,25 @@ tools/          Reverse-engineering utilities
 
 ## Milestone 2
 
-- [x] Replay captured RGB Feature Report
+- [x] Replay captured RGB Feature Reports
 
 ## Milestone 3
 
-- [ ] Generate RGB Feature Reports directly from Python
+- [x] Generate RGB Feature Reports directly from Python
 
 ## Milestone 4
 
-- [ ] Control individual keys
+- [x] Introduce logical key API
+- [ ] Expand verified key map
 
 ## Milestone 5
 
-- [ ] Complete key map
-- [ ] Animation support
+- [ ] Animation framework
 
 ## Milestone 6
 
 - [ ] Linux support
-- [ ] Public API stabilization
+- [ ] Stable public API
 
 ---
 
@@ -143,13 +169,13 @@ tools/          Reverse-engineering utilities
 |----------|-------|
 | Transport | USB HID Feature Report |
 | Report ID | `0x09` |
-| Feature Report Size | 520 bytes |
+| Report Size | 520 bytes |
 | Interface | `MI_01` |
 | Usage Page | `0xFF02` |
 | Lighting Packet | `0x08` |
 | Status Packet | `0x0B` |
 
-Detailed protocol documentation will be published under `docs/` as implementation progresses.
+Detailed protocol documentation is available under the `docs/` directory.
 
 ---
 
@@ -157,13 +183,13 @@ Detailed protocol documentation will be published under `docs/` as implementatio
 
 The project can currently:
 
-- Discover the correct RGB HID interface
+- Discover the RGB HID interface
 - Open the vendor HID collection
-- Send HID Feature Reports
-- Replay captured RGB packets
-- Successfully control keyboard lighting from Python
+- Generate valid RGB Feature Reports
+- Control keyboard lighting entirely from Python
+- Control verified individual keys using logical key names
 
-Current development is focused on replacing captured packets with packets generated entirely by the library.
+Current development focuses on completing the verified key map and implementing animation support.
 
 ---
 
@@ -173,7 +199,15 @@ Current development is focused on replacing captured packets with packets genera
 |----------|--------|
 | Royal Kludge RK M75 | ✅ Verified |
 
-Support for additional Royal Kludge keyboards may be added in the future if their protocols are compatible.
+Support for additional Royal Kludge keyboards may be added if compatible protocols are identified.
+
+---
+
+# Reverse Engineering Status
+
+The USB HID lighting protocol has been successfully reverse engineered and validated against real hardware.
+
+Current development is focused on improving the public API rather than discovering additional protocol details.
 
 ---
 
@@ -181,9 +215,7 @@ Support for additional Royal Kludge keyboards may be added in the future if thei
 
 Contributions are welcome.
 
-The protocol has been reverse engineered, but the public API is still evolving. Expect internal interfaces to change until packet generation and key mapping are complete.
-
-If you discover protocol differences on another RK keyboard, please open an issue.
+The protocol is understood, but the public API is still evolving. If you discover protocol differences on another Royal Kludge keyboard or improve the implementation, feel free to open an issue or submit a pull request.
 
 ---
 
