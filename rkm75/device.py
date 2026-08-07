@@ -9,8 +9,19 @@ class RKM75:
         self.device_info = discover()
         self.transport = HidTransport(self.device_info["path"])
 
+    # Existing method (keep this)
     def send_feature_report(self, data: bytes) -> int:
         return self.transport.send_feature(data)
+
+    # New method
+    def send(self, frame):
+        from .packet import Packet
+
+        packet = Packet(frame)
+
+        return self.transport.send_feature(
+            packet.to_bytes()
+        )
 
     def close(self):
         self.transport.close()
