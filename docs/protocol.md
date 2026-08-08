@@ -1,155 +1,208 @@
-# RK M75 USB HID Protocol
+# RK M75 RGB Protocol
 
-This document describes the USB HID protocol used by the Royal Kludge RK M75 for RGB lighting control.
+This document describes the currently reverse-engineered RGB communication
+protocol for the RK M75.
 
----
+Tested device:
 
-# Device Information
-
-| Property | Value |
-|----------|-------|
-| Vendor ID | `0x258A` |
-| Product ID | `0x0163` |
-| Manufacturer | SINO WEALTH |
-| Product | Gaming KB |
-| Interface | `MI_01` |
-| Usage Page | `0xFF02` |
-| Usage | `0x0001` |
-
-The RGB interface is exposed as a vendor-defined HID collection.
+VID:     0x258A
+PID:     0x0163
+Device:  RK-M75RGB New layout
 
 ---
 
-# Transport
+## USB / HID
 
-Lighting updates are sent using USB HID Feature Reports.
+The RGB interface is exposed through the vendor HID collection.
 
-| Property | Value |
-|----------|-------|
-| Request | SET_REPORT |
-| Report Type | Feature Report |
-| Report ID | `0x09` |
-| Report Size | 520 bytes |
+Interface:   1
+MI:          MI_01
+Usage Page:  0xFF02
+Usage:       0x01
 
-No interrupt OUT endpoint is used.
+Communication is performed using HID Feature Reports.
 
 ---
 
-# Feature Report Layout
+## Feature Report
 
-```
-+--------+----------------------+-------------+
-| Header | RGB Framebuffer      | Padding     |
-+--------+----------------------+-------------+
-| 8 B    | 378 B                | 134 B       |
-+--------+----------------------+-------------+
-```
+The RGB lighting report has:
 
-Total report size:
+Report ID: 0x09
+Size:      520 bytes
 
-```
-520 bytes
-```
+The report can be sent using HID Feature Report communication.
+
+The report was successfully replayed from a captured packet and later
+generated entirely from Python.
 
 ---
 
-# Header
+## Lighting Packet
 
-The first eight bytes are constant for lighting packets.
+The RGB lighting packet contains packet type:
 
-```
-09 08 00 00 01 00 7A 01
-```
+0x08
 
-| Offset | Value | Description |
-|--------|------|-------------|
-| 0 | `0x09` | Report ID |
-| 1 | `0x08` | Lighting packet |
-| 2-3 | `0x0000` | Reserved |
-| 4 | `0x01` | Constant |
-| 5 | `0x00` | Reserved |
-| 6-7 | `0x017A` | Payload length (378 bytes) |
+A separate status packet type was identified:
+
+0x0B
+
+The packet contains the RGB framebuffer used to control the keyboard
+lighting.
 
 ---
 
-# RGB Framebuffer
+## RGB Framebuffer
 
-The framebuffer begins immediately after the header.
+The framebuffer contains RGB values for the keyboard's RGB positions.
 
-Offset:
+The library represents the framebuffer using a logical `Frame` object.
 
-```
-8
-```
+The library converts the logical key representation into the vendor's
+520-byte Feature Report format.
 
-Length:
+No checksum has been identified in the lighting packet.
 
-```
-378 bytes
-```
-
-Entries:
-
-```
-126 RGB slots
-```
-
-Each entry consists of three bytes.
-
-```
-R G B
-```
-
-Example:
-
-```
-FF 00 00
-```
-
-represents red.
+No sequence counter has been identified in the lighting packet.
 
 ---
 
-# Packet Types
+## Key Mapping
 
-## 0x08
+The logical key → framebuffer index mapping was derived from the official
+RK software's device-specific configuration for PID `0x0163`.
 
-Lighting update.
+The configuration is located under:
 
-Contains the RGB framebuffer.
+C:\Program Files (x86)\RK Keyboard Software\Dev\0163\
 
----
+The `[KEY]` section contains the physical keyboard layout and internal
+key indices.
 
-## 0x0B
+Examples:
 
-Status packet.
+A      → LED 9
+SPACE  → LED 35
 
-Observed periodically while the official software is running.
-
-The purpose of the payload has not yet been determined.
-
----
-
-# Padding
-
-The remaining bytes after the framebuffer are zero.
-
-They are ignored by the keyboard.
+The complete 81-key mapping was validated on the physical RK M75.
 
 ---
 
-# Validation
+## Firmware Takeover
 
-The protocol has been validated by:
+The keyboard firmware continues to manage its onboard lighting state after
+an external RGB Feature Report is received.
 
-- Replaying captured Feature Reports.
-- Generating Feature Reports entirely from Python.
-- Successfully controlling keyboard lighting on hardware.
+A single RGB report is therefore transient.
+
+Observed behavior:
+
+Send report
+    ↓
+RGB state changes
+    ↓
+~1 second
+    ↓
+Firmware reasserts its lighting state
+
+This behavior was observed with the official RK software closed.
 
 ---
 
-# Current Limitations
+## Lighting-Off Behavior
 
-The protocol described here currently applies only to the Royal Kludge RK M75.
+Setting the official RK software's lighting mode to Off does not disable
+the firmware takeover mechanism.
 
-Compatibility with other Royal Kludge keyboards has not yet been investigated.
+With the official software closed:
+
+Lighting Off
+     ↓
+Send single RGB report
+     ↓
+RGB state appears
+     ↓
+~1 second
+     ↓
+Keyboard returns to black
+
+Therefore, an external application cannot currently rely on the official
+software's Off state to permanently release RGB control.
+
+---
+
+## Continuous Updates
+
+Repeatedly sending the same Feature Report maintains external RGB control.
+
+A 10 Hz test was performed:
+
+Interval:  100 ms
+Frequency: 10 Hz
+Duration:  More than 60 seconds
+
+The requested RGB state remained active for the entire test.
+
+When transmission stopped, the keyboard reclaimed control after
+approximately one second.
+
+Therefore:
+
+10 Hz continuous Feature Reports
+        =
+validated persistent external RGB control
+
+This should currently be considered the **known-good update rate**, rather
+than the minimum or maximum supported rate.
+
+---
+
+## Streaming
+
+Continuous RGB streaming is proven to work at 10 Hz.
+
+The maximum stable update rate has not yet been determined.
+
+Future tests will characterize:
+
+* Minimum stable update rate
+* Maximum stable update rate
+* Frame latency
+* Long-duration stability
+* Behavior at higher transmission rates
+* Actual visible frame rate
+
+The streaming implementation will be developed separately from the
+current key-mapping implementation.
+
+---
+
+## Compatibility
+
+The official RK software contains configuration entries for many RK
+keyboard PIDs.
+
+This does not establish compatibility with this protocol implementation.
+
+The protocol described here has only been experimentally validated on:
+
+VID:    0x258A
+PID:    0x0163
+Device: RK-M75RGB New layout
+
+Other RK keyboards require independent validation.
+
+---
+
+## Known Unknowns
+
+The following areas remain incomplete:
+
+* Exact semantics of all packet fields
+* Complete status packet documentation
+* Encoder RGB/control mapping
+* Minimum keepalive frequency
+* Maximum stable streaming rate
+* Maximum practical animation rate
+* Protocol differences between other RK keyboard models
