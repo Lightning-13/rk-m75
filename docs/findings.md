@@ -5,11 +5,11 @@ RK M75 RGB lighting protocol and the official RK Keyboard Software.
 
 The primary hardware tested throughout this project is:
 
-```text
+````text
 Vendor ID:  0x258A
 Product ID: 0x0163
 Device:     RK-M75RGB New layout
-```
+````
 
 ---
 
@@ -57,7 +57,7 @@ The RGB lighting packet uses packet type:
 
 ```text
 0x08
-````
+```
 
 A separate status packet type was also identified:
 
@@ -271,7 +271,7 @@ Approximately 1 second
 Keyboard returns to black
 ```
 
-Therefore, setting the official software's lighting mode to Off does not
+Therefore, setting the official RK software's lighting mode to Off does not
 provide a persistent external RGB mode.
 
 This means the external controller cannot currently rely on the official

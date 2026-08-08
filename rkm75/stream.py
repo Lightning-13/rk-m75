@@ -1,5 +1,6 @@
+import math
+from numbers import Real
 import time
-
 
 DEFAULT_FPS = 33.0
 MAX_FPS = 33.0
@@ -7,6 +8,13 @@ MAX_FPS = 33.0
 
 class RGBStream:
     def __init__(self, device, fps=DEFAULT_FPS):
+        if (
+            isinstance(fps, bool)
+            or not isinstance(fps, Real)
+            or not math.isfinite(fps)
+        ):
+            raise ValueError("FPS must be a finite number.")
+
         if fps <= 0:
             raise ValueError("FPS must be greater than 0.")
 

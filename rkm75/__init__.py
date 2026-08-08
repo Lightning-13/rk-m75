@@ -5,4 +5,5 @@ from .stream import RGBStream
 __all__ = [
     "RKM75",
     "Frame",
+    "RGBStream",
 ]

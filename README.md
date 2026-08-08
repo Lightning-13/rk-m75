@@ -2,7 +2,7 @@
 
 An open-source Python library for controlling the RGB lighting on the Royal Kludge RK M75 keyboard without the official Windows software.
 
-> **Project Status:** Core reverse engineering complete. RGB control, the 81-key mapping, continuous RGB control, and 33 Hz live RGB streaming have been validated on hardware. The streaming API is now implemented. Additional device support and OpenRGB/SignalRGB integration remain future work.
+> **Project Status:** Core reverse engineering and the standalone RK M75 RGB control library are complete. RGB control, the 81-key mapping, continuous RGB control, and 33 Hz live RGB streaming have been validated on hardware. The public API has been hardened and covered by automated tests. Community hardware testing is the next step before OpenRGB/SignalRGB integration.
 
 ---
 
@@ -19,6 +19,9 @@ An open-source Python library for controlling the RGB lighting on the Royal Klud
 - Stream continuously changing RGB frames
 - Validated smooth RGB animation at 33 Hz
 - Provide a reusable `RGBStream` API
+- Validate RGB frame and streaming inputs
+- Provide explicit HID transport lifecycle handling
+- Automated API regression test suite
 - Document the reverse-engineered protocol and firmware behavior
 
 ---
@@ -77,6 +80,12 @@ Linux support is currently untested and is not an immediate development priority
 - [x] RGB streaming API
 - [x] 33 Hz streaming validation
 - [x] RGB animation validation
+- [x] Public package API
+- [x] RGB frame input validation
+- [x] RGBStream input validation
+- [x] HID transport lifecycle handling
+- [x] Automated API regression tests
+- [x] Hardware regression validation
 - [ ] Additional device support
 - [ ] OpenRGB integration
 - [ ] SignalRGB integration
@@ -86,54 +95,49 @@ Linux support is currently untested and is not an immediate development priority
 
 # Important Firmware Behavior
 
-The RK M75 does not permanently retain an externally supplied RGB
-framebuffer after receiving a single Feature Report.
+The RK M75 does not permanently retain an externally supplied RGB framebuffer after receiving a single Feature Report.
 
 With the official RK software closed:
 
 ````text
 Single Feature Report
-        ↓
+    |
+    v
 Requested RGB state
-        ↓
+    |
+    v
 ~1 second
-        ↓
+    |
+    v
 Keyboard firmware reclaims lighting control
 ````
 
-Setting the official software's lighting mode to **Off** does not prevent
-this behavior. A single externally supplied RGB frame still disappears
-after approximately one second.
+Setting the official software's lighting mode to **Off** does not prevent this behavior. A single externally supplied RGB frame still disappears after approximately one second.
 
-However, continuously transmitting the same Feature Report maintains
-external RGB control.
+However, continuously transmitting the same Feature Report maintains external RGB control.
 
-A test at 10 Hz successfully kept the keyboard red for more than one
-minute.
+A test at 10 Hz successfully kept the keyboard red for more than one minute.
 
-When transmission stopped, the keyboard reclaimed the lighting state
-after approximately one second.
+When transmission stopped, the keyboard reclaimed the lighting state after approximately one second.
 
 ---
 
 # Streaming Behavior
 
-Continuous Feature Report transmission can be used to maintain control
-of the RGB framebuffer and produce live RGB animations.
+Continuous Feature Report transmission can be used to maintain control of the RGB framebuffer and produce live RGB animations.
 
 The tested RK M75 successfully sustained:
 
 ```text
-10 Hz   → stable
-20 Hz   → stable
-30 Hz   → stable
-31 Hz   → stable
-32 Hz   → stable
-33 Hz   → stable
+10 Hz   -> stable
+20 Hz   -> stable
+30 Hz   -> stable
+31 Hz   -> stable
+32 Hz   -> stable
+33 Hz   -> stable
 ```
 
-At 33 Hz, continuously changing RGB frames produced a smooth visual
-animation on the keyboard.
+At 33 Hz, continuously changing RGB frames produced a smooth visual animation on the keyboard.
 
 A 5-minute continuous animation test produced:
 
@@ -160,35 +164,37 @@ Median send time:  ~83 ms
 
 Additional tests at 35 Hz and 40 Hz produced approximately 15 FPS.
 
-An unrestricted stress test, with no FPS limiter, also settled at
-approximately 15 FPS.
+An unrestricted stress test, with no FPS limiter, also settled at approximately 15 FPS.
 
-A changing-frame stress test produced the same behavior, showing that
-the slowdown is not caused by repeatedly transmitting an unchanged RGB
-frame.
+A changing-frame stress test produced the same behavior, showing that the slowdown is not caused by repeatedly transmitting an unchanged RGB frame.
 
 The current evidence therefore shows:
 
-> **33 Hz is the highest update rate currently validated as stable on the
-> tested RK M75 under Windows. At 34 Hz, `send_feature_report()` enters a
-> significantly slower blocking behavior and observed throughput drops
-> to approximately 15 Hz.**
+> **33 Hz is the highest update rate currently validated as stable on the tested RK M75 under Windows. At 34 Hz, `send_feature_report()` enters a significantly slower blocking behavior and observed throughput drops to approximately 15 Hz.**
 
-This should not currently be interpreted as a proven absolute hardware
-maximum. The exact layer responsible for the behavior has not yet been
-isolated.
+This should not currently be interpreted as a proven absolute hardware maximum. The exact layer responsible for the behavior has not yet been isolated.
 
-For this reason, the current `RGBStream` implementation limits the
-configured streaming rate to a maximum of 33 Hz.
+For this reason, the current `RGBStream` implementation limits the configured streaming rate to a maximum of 33 Hz.
 
 ---
 
 # Streaming API
 
-The library provides an `RGBStream` interface for continuous RGB
-transmission.
+The library provides an `RGBStream` interface for continuous RGB transmission.
 
-Example:
+## Basic RGB control
+
+```python
+from rkm75 import Frame, RKM75
+
+frame = Frame()
+frame.set_key("A", (255, 0, 0))
+
+with RKM75() as kb:
+    kb.send(frame)
+```
+
+## Continuous RGB streaming
 
 ```python
 from rkm75 import Frame, RKM75
@@ -202,12 +208,9 @@ with RKM75() as kb:
             stream.send(frame)
 ```
 
-The streaming layer handles the update timing while the caller remains
-responsible for generating or modifying the `Frame`.
+The streaming layer handles the update timing while the caller remains responsible for generating or modifying the `Frame`.
 
-This separation allows future applications to provide RGB frames from
-external sources without needing to implement the HID timing logic
-themselves.
+This separation allows future applications to provide RGB frames from external sources without needing to implement the HID timing logic themselves.
 
 The current implementation accepts streaming rates up to 33 Hz.
 
@@ -215,11 +218,9 @@ The current implementation accepts streaming rates up to 33 Hz.
 
 # Vendor Configuration and Key Mapping
 
-The official RK Keyboard Software uses a shared configuration system for
-multiple Royal Kludge keyboard models.
+The official RK Keyboard Software uses a shared configuration system for multiple Royal Kludge keyboard models.
 
-The main configuration file contains a large list of supported VID/PID
-combinations. The RK M75 tested by this project is:
+The main configuration file contains a large list of supported VID/PID combinations. The RK M75 tested by this project is:
 
 ```text
 VID: 0x258A
@@ -227,8 +228,7 @@ PID: 0x0163
 Device: RK-M75RGB New layout
 ```
 
-The device-specific keyboard layout was found under the RK software's
-`Dev` directory.
+The device-specific keyboard layout was found under the RK software's `Dev` directory.
 
 Typical Windows installation path:
 
@@ -242,49 +242,40 @@ For the RK M75:
 C:\Program Files (x86)\RK Keyboard Software\Dev\0163\
 ```
 
-The device-specific configuration contains the keyboard layout and key
-definitions used by the official software.
+The device-specific configuration contains the keyboard layout and key definitions used by the official software.
 
-The `[KEY]` section contains the physical keyboard layout and internal
-key indices. These indices correspond to the RGB framebuffer positions.
+The `[KEY]` section contains the physical keyboard layout and internal key indices. These indices correspond to the RGB framebuffer positions.
 
-The complete 81-key mapping was extracted from this configuration and
-validated against the physical keyboard.
+The complete 81-key mapping was extracted from this configuration and validated against the physical keyboard.
 
 For example:
 
 ```text
-A     → LED 9
-SPACE → LED 35
+A     -> LED 9
+SPACE -> LED 35
 ```
 
 Both mappings were independently verified through hardware testing.
 
-The complete 81-key mapping was then tested by illuminating every mapped
-key, followed by a row-based color test. All mapped keys illuminated in
-their expected physical positions.
+The complete 81-key mapping was then tested by illuminating every mapped key, followed by a row-based color test. All mapped keys illuminated in their expected physical positions.
 
-The configuration reports `LayoutKeyNum=84`, but only the 81 main RGB
-keyboard keys are currently mapped by the library. Additional controls,
-such as the encoder, are outside the current keymap scope.
+The RGB framebuffer contains 126 RGB entries, while the library currently exposes 81 mapped physical keyboard keys.
+
+The configuration reports `LayoutKeyNum=84`, but only the 81 main RGB keyboard keys are currently mapped by the library. Additional controls, such as the encoder, are outside the current keymap scope.
 
 ---
 
 # Compatibility With Other RK Keyboards
 
-The official RK configuration contains many other Royal Kludge keyboard
-PIDs.
+The official RK configuration contains many other Royal Kludge keyboard PIDs.
 
-This suggests that the shared RK software and its device-specific
-configuration system support a wide range of RK keyboards.
+This suggests that the shared RK software and its device-specific configuration system support a wide range of RK keyboards.
 
 However:
 
-> **Presence of a PID in the official configuration does not mean that
-> this project supports that keyboard.**
+> **Presence of a PID in the official configuration does not mean that this project supports that keyboard.**
 
-The protocol, packet layout, framebuffer layout, key mapping, firmware
-behavior, and streaming behavior have only been validated on:
+The protocol, packet layout, framebuffer layout, key mapping, firmware behavior, and streaming behavior have only been validated on:
 
 ```text
 VID 0x258A
@@ -292,12 +283,9 @@ PID 0x0163
 RK-M75RGB New layout
 ```
 
-Other RK keyboards should be considered **unverified** and must be
-tested independently.
+Other RK keyboards should be considered **unverified** and must be tested independently.
 
-The same RK software driver/configuration system may work with other
-devices listed in the vendor configuration, but compatibility is not
-guaranteed.
+The same RK software driver/configuration system may work with other devices listed in the vendor configuration, but compatibility is not guaranteed.
 
 ---
 
@@ -359,16 +347,13 @@ tools/          Reverse-engineering utilities
                 +------------------+
 ```
 
-`RGBStream` provides the timing layer for continuous transmission while
-the existing packet and transport layers remain responsible for turning
-the framebuffer into USB HID Feature Reports.
+`RGBStream` provides the timing layer for continuous transmission while the existing packet and transport layers remain responsible for turning the framebuffer into USB HID Feature Reports.
 
 ---
 
 # Examples
 
-Examples are numbered roughly in the order they were developed during
-reverse engineering.
+Examples are numbered roughly in the order they were developed during reverse engineering.
 
 ```text
 examples/
@@ -444,8 +429,7 @@ This measures scheduled Feature Report streaming performance.
 python examples/09_stress_stream.py --duration 10
 ```
 
-This removes the FPS limiter and measures the behavior of the HID
-Feature Report transport when pushed continuously.
+This removes the FPS limiter and measures the behavior of the HID Feature Report transport when pushed continuously.
 
 ### Stress-test changing RGB frames
 
@@ -453,8 +437,7 @@ Feature Report transport when pushed continuously.
 python examples/10_stress_changing_frames.py --duration 10
 ```
 
-This continuously changes the RGB framebuffer while measuring transport
-throughput.
+This continuously changes the RGB framebuffer while measuring transport throughput.
 
 ### Test smooth 33 Hz RGB animation
 
@@ -473,6 +456,56 @@ python examples/12_stream.py
 ```
 
 This demonstrates the library's `RGBStream` interface.
+
+---
+
+# Automated Tests
+
+The project includes a hardware-independent regression test suite covering the core public API and protocol layers.
+
+Current test coverage includes:
+
+```text
+tests/
+    test_device.py
+    test_frame.py
+    test_keymap.py
+    test_packet.py
+    test_stream.py
+    test_transport.py
+```
+
+The current suite contains:
+
+```text
+54 tests
+```
+
+All 54 tests pass on the development environment.
+
+The tests cover:
+
+* Public `RKM75` API behavior
+* Device discovery delegation
+* Device lifecycle and context management
+* RGB framebuffer creation
+* RGB input validation
+* LED index validation
+* Logical key mapping
+* 81-key mapping integrity
+* Packet structure and size
+* Feature Report padding
+* Packet file output
+* RGBStream FPS validation
+* RGBStream lifecycle
+* RGBStream timing behavior
+* HID transport validation
+* HID transport lifecycle
+* Closed-transport behavior
+
+The automated tests do not require a physical RK M75.
+
+Hardware validation is performed separately using the numbered examples.
 
 ---
 
@@ -512,15 +545,32 @@ This demonstrates the library's `RGBStream` interface.
 * [x] Validate long-duration stability
 * [x] Build streaming API
 * [x] Validate smooth RGB animations
-* [ ] Further investigate the 33/34 Hz transport boundary
-* [ ] Optimize streaming implementation if possible
-* [ ] Validate per-key changing-frame animations
+
+## Milestone 6 — API Hardening & Reliability
+
+* [x] Define public package API
+* [x] Validate RGB frame inputs
+* [x] Validate LED indices
+* [x] Validate RGBStream FPS inputs
+* [x] Harden HID transport lifecycle
+* [x] Add device unit tests
+* [x] Add frame unit tests
+* [x] Add packet unit tests
+* [x] Add stream unit tests
+* [x] Add transport unit tests
+* [x] Add keymap regression tests
+* [x] Validate hardened implementation on hardware
+* [x] Revalidate 33 Hz streaming stability
+* [x] Revalidate 81-key RGB mapping
+* [x] Revalidate continuous RGB control
+* [x] Confirm 54 automated tests pass
 
 ## Future
 
-* [ ] Additional RK keyboard models
+* [ ] Community testing on additional RK M75 systems
 * [ ] OpenRGB integration
 * [ ] SignalRGB integration
+* [ ] Additional RK keyboard models
 * [ ] Linux support
 
 ---
@@ -539,6 +589,8 @@ This demonstrates the library's `RGBStream` interface.
 | Usage Page            | `0xFF02`               |
 | Lighting packet type  | `0x08`                 |
 | Status packet type    | `0x0B`                 |
+| RGB framebuffer       | `126 RGB entries`      |
+| Mapped physical keys  | `81`                   |
 | Validated stream rate | `33 Hz`                |
 
 More detailed protocol information is available in:
@@ -559,9 +611,7 @@ docs/findings.md
 
 Contributions are welcome.
 
-The core RGB control and streaming path has been validated on the RK M75,
-but the internal API may continue to evolve as the streaming and device
-abstraction layers are expanded.
+The standalone RGB control and streaming API has been validated on the RK M75 and covered by automated regression tests. The API may continue to evolve as integration work begins.
 
 Hardware testing is currently focused on the RK M75 with:
 
@@ -570,8 +620,9 @@ VID 0x258A
 PID 0x0163
 ```
 
-Contributions involving other RK devices should include hardware and
-protocol validation where possible.
+Community testing of additional RK M75 units is especially welcome before OpenRGB and SignalRGB integration work begins.
+
+Contributions involving other RK devices should include hardware and protocol validation where possible.
 
 ---
 
@@ -579,4 +630,4 @@ protocol validation where possible.
 
 MIT
 
-````
+```

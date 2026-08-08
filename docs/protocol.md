@@ -5,11 +5,11 @@ protocol for the RK M75.
 
 The protocol has been experimentally validated on the following device:
 
-```text
+````text
 VID:     0x258A
 PID:     0x0163
 Device:  RK-M75RGB New layout
-```
+````
 
 Other RK keyboard models are not currently considered validated.
 
@@ -73,9 +73,50 @@ The exact semantics of every packet field have not yet been established.
 
 ---
 
+## Report Layout
+
+The current generated RGB Feature Report has the following layout:
+
+```text
+Offset       Size        Description
+------       ----        -----------
+0x00         8           Lighting packet header
+0x08         378         RGB framebuffer
+0x17A        134         Padding
+```
+
+The complete report is:
+
+```text
+8 + 378 + 134 = 520 bytes
+```
+
+The lighting packet header currently used by the library is:
+
+```text
+09 08 00 00 01 00 7A 01
+```
+
+The header is followed directly by the RGB framebuffer and then the
+remaining report padding.
+
+---
+
 ## RGB Framebuffer
 
 The Feature Report contains the RGB framebuffer used by the keyboard.
+
+The framebuffer contains:
+
+```text
+126 RGB entries × 3 bytes = 378 bytes
+```
+
+Each RGB entry contains:
+
+```text
+R G B
+```
 
 The library represents the framebuffer using a logical `Frame` object.
 
@@ -124,8 +165,15 @@ LayoutKeyNum=84
 
 but the current library maps the 81 main RGB keyboard keys.
 
-The remaining three logical positions, potentially associated with the
-rotary encoder or other controls, have not been experimentally mapped.
+The RGB framebuffer contains 126 positions, while only 81 positions are
+currently exposed through the logical key API.
+
+The remaining framebuffer positions are not currently exposed through the
+logical key mapping.
+
+The remaining three logical layout positions reported by the vendor
+configuration have not been experimentally mapped and may be associated
+with the rotary encoder or other controls.
 
 ---
 
@@ -255,6 +303,9 @@ The keyboard remained visually stable for the complete five-minute test.
 This establishes 33 Hz as the highest update rate currently validated as
 stable for this implementation.
 
+This is a validated implementation limit, not a claim that 33 Hz is the
+absolute physical maximum of the keyboard.
+
 ---
 
 ## Streaming Behavior Above 33 Hz
@@ -295,8 +346,13 @@ unchanged framebuffer.
 All of these tests completed without reported Feature Report send errors.
 
 The exact layer responsible for this behavior has not yet been isolated.
-Possible factors include the Windows HID path, HID library/backend,
-USB scheduling, or device-side flow control.
+
+Possible factors include:
+
+* Windows HID path
+* HID library/backend
+* USB scheduling
+* Device-side flow control
 
 Therefore:
 
@@ -380,8 +436,42 @@ RK M75
 The packet layer converts the logical framebuffer into the vendor Feature
 Report format.
 
+The transport layer performs the HID Feature Report communication.
+
 This separation is intended to make the streaming layer reusable by future
 RGB integrations.
+
+---
+
+## Protocol Constants
+
+The currently established protocol constants are:
+
+```text
+USB Vendor ID:       0x258A
+USB Product ID:      0x0163
+
+HID Interface:       1
+HID Collection:      MI_01
+Usage Page:          0xFF02
+Usage:               0x01
+
+Feature Report ID:   0x09
+Feature Report Size: 520 bytes
+
+Lighting Packet:     0x08
+Status Packet:       0x0B
+
+Header Size:         8 bytes
+Framebuffer Size:    378 bytes
+RGB Entry Size:      3 bytes
+RGB Entries:         126
+Padding Size:        134 bytes
+
+Validated Keymap:    81 keys
+Validated Keepalive: 10 Hz
+Validated Streaming: 33 Hz
+```
 
 ---
 
@@ -413,15 +503,19 @@ key mapping, or streaming behavior will work.
 
 The following areas remain incomplete:
 
-- Exact semantics of all packet fields
-- Complete status packet documentation
-- Encoder RGB/control mapping
-- Minimum keepalive frequency
-- Exact cause of the 33/34 Hz transport boundary
-- Maximum theoretical streaming rate
-- Protocol differences between other RK keyboard models
-- Per-key changing-frame streaming validation
-- Additional device support
+* Exact semantics of all packet fields
+* Complete status packet documentation
+* Encoder RGB/control mapping
+* Minimum keepalive frequency
+* Exact cause of the 33/34 Hz transport boundary
+* Maximum theoretical streaming rate
+* Protocol differences between other RK keyboard models
+* Per-key changing-frame streaming validation
+* Additional device support
+
+These unknowns do not prevent the current standalone RK M75 RGB library
+from providing validated RGB control and 33 Hz streaming on the tested
+device.
 
 ---
 
@@ -443,8 +537,40 @@ Feature Report Size: 520 bytes
 Lighting Packet:     0x08
 Status Packet:       0x0B
 
+Header:              8 bytes
+RGB Framebuffer:     378 bytes
+RGB Entries:         126
+Padding:             134 bytes
+
 Validated Keymap:    81 keys
 Keepalive:           10 Hz validated
 Streaming:           33 Hz validated
 Long-duration test:  5 minutes / 9900 frames
+```
+
+---
+
+## Validation Status
+
+The protocol described in this document has been validated against the
+physical RK M75 using:
+
+* Captured Feature Report replay
+* Python-generated Feature Reports
+* Full-frame RGB output
+* Individual key RGB output
+* Complete 81-key mapping validation
+* Continuous 10 Hz RGB control
+* 33 Hz RGB streaming
+* Changing-frame RGB animation
+* 34/35/40 Hz transport characterization
+* Unrestricted transport stress testing
+* Changing-frame stress testing
+* Five-minute 33 Hz stability testing
+
+The current implementation is therefore considered validated for the
+RK M75 device identified by VID `0x258A` and PID `0x0163`.
+
+Other devices remain unvalidated.
+
 ```
