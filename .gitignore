@@ -15,6 +15,11 @@ dist/
 reports/*
 !reports/.gitkeep
 
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
 # VS Code
 .vscode/
 
@@ -22,5 +27,6 @@ reports/*
 .DS_Store
 Thumbs.db
 
+# Captured/generated binary analysis files
 captures/report9.bin
 captures/report9.hex
