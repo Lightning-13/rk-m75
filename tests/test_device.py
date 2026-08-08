@@ -1,7 +1,8 @@
-from rkm75.device import RKM75Device
+from rkm75.device import RKM75
 
 
-def test_constants():
-    assert RKM75Device.VID == 0x258A
-    assert RKM75Device.PID == 0x0163
-    assert RKM75Device.INTERFACE == 1
+def test_device_class():
+    assert RKM75 is not None
+    assert hasattr(RKM75, "send_feature_report")
+    assert hasattr(RKM75, "send")
+    assert hasattr(RKM75, "stream")

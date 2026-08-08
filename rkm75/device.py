@@ -1,7 +1,6 @@
-from __future__ import annotations
-
 from .discovery import discover
 from .transport import HidTransport
+from .stream import RGBStream
 
 
 class RKM75:
@@ -9,11 +8,10 @@ class RKM75:
         self.device_info = discover()
         self.transport = HidTransport(self.device_info["path"])
 
-    # Existing method (keep this)
+    # Existing method
     def send_feature_report(self, data: bytes) -> int:
         return self.transport.send_feature(data)
 
-    # New method
     def send(self, frame):
         from .packet import Packet
 
@@ -22,6 +20,9 @@ class RKM75:
         return self.transport.send_feature(
             packet.to_bytes()
         )
+
+    def stream(self, fps=33):
+        return RGBStream(self, fps=fps)
 
     def close(self):
         self.transport.close()

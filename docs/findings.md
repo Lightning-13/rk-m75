@@ -5,9 +5,11 @@ RK M75 RGB lighting protocol and the official RK Keyboard Software.
 
 The primary hardware tested throughout this project is:
 
+```text
 Vendor ID:  0x258A
 Product ID: 0x0163
 Device:     RK-M75RGB New layout
+```
 
 ---
 
@@ -17,11 +19,13 @@ The RK M75 exposes a vendor-specific HID interface used for RGB control.
 
 Observed device information:
 
+```text
 Vendor ID:   0x258A
 Product ID:  0x0163
 Interface:   1
 MI:          MI_01
 Usage Page:  0xFF02
+```
 
 The RGB interface is exposed through the vendor HID collection associated
 with `MI_01`.
@@ -34,8 +38,10 @@ RGB communication uses a HID Feature Report.
 
 Observed properties:
 
+```text
 Report ID:   0x09
 Report Size: 520 bytes
+```
 
 A captured RGB Feature Report was successfully replayed directly to the
 keyboard.
@@ -49,11 +55,15 @@ state, confirming that the report contains the RGB framebuffer data.
 
 The RGB lighting packet uses packet type:
 
+```text
 0x08
+````
 
 A separate status packet type was also identified:
 
+```text
 0x0B
+```
 
 The lighting report uses a fixed-size 520-byte Feature Report.
 
@@ -92,9 +102,11 @@ combinations.
 
 The RK M75 is explicitly identified as:
 
+```text
 VID:    0x258A
 PID:    0x0163
 Device: RK-M75RGB New layout
+```
 
 This confirms that the official software recognizes PID `0x0163` as the
 RK M75 RGB new-layout device.
@@ -108,33 +120,43 @@ directory of the official RK Keyboard Software installation.
 
 Typical Windows path:
 
+```text
 C:\Program Files (x86)\RK Keyboard Software\Dev\<PID>\
+```
 
 For the RK M75:
 
+```text
 C:\Program Files (x86)\RK Keyboard Software\Dev\0163\
+```
 
 The exact installation path may differ depending on the software version
 or Windows installation. The important structure is:
 
+```text
 RK Keyboard Software
 └── Dev
     └── 0163
+```
 
 The PID-specific configuration contains the keyboard layout used by the
 official software.
 
 Relevant configuration values include:
 
+```text
 RGBKb=1
 LayoutKeyNum=84
 KbLayout=5
 LayerNum=3
+```
 
 The configuration contains:
 
+```text
 [KEY]
 [FN1]
+```
 
 sections describing the keyboard layout and Fn-layer behavior.
 
@@ -154,8 +176,10 @@ framebuffer position.
 Two mappings had already been independently established through hardware
 testing:
 
+```text
 A      → LED 9
 SPACE  → LED 35
+```
 
 The vendor configuration contained the same indices.
 
@@ -171,7 +195,9 @@ using a generated RGB Feature Report.
 
 Result:
 
+```text
 81 / 81 mapped keys illuminated
+```
 
 A second row-based color test was performed to verify that the indices
 corresponded to the expected physical positions.
@@ -189,7 +215,9 @@ library.
 
 The vendor configuration reports:
 
+```text
 LayoutKeyNum=84
+```
 
 while the current RGB keymap covers the 81 main keyboard keys.
 
@@ -210,6 +238,7 @@ indefinitely.
 
 With the official RK software closed:
 
+```text
 Send RGB report
       ↓
 Requested RGB state appears
@@ -217,6 +246,7 @@ Requested RGB state appears
 Approximately 1 second
       ↓
 Keyboard firmware reclaims lighting state
+```
 
 This behavior occurs independently of the official software.
 
@@ -233,14 +263,22 @@ A single generated RGB Feature Report was sent.
 
 Observed result:
 
+```text
 RGB state appears
       ↓
 Approximately 1 second
       ↓
 Keyboard returns to black
+```
 
 Therefore, setting the official software's lighting mode to Off does not
 provide a persistent external RGB mode.
+
+This means the external controller cannot currently rely on the official
+software being placed in an Off state before taking control.
+
+Continuous Feature Report transmission is the standalone method currently
+used to maintain external RGB control.
 
 ---
 
@@ -248,11 +286,13 @@ provide a persistent external RGB mode.
 
 A keepalive test repeatedly transmitted the same RGB Feature Report.
 
-Test configuration:
+Initial test configuration:
 
+```text
 Update rate: 10 Hz
 Interval:    100 ms
 Duration:    More than 60 seconds
+```
 
 The keyboard remained at the requested RGB state for the entire test.
 
@@ -268,10 +308,13 @@ lighting state.
 
 Observed delay:
 
+```text
 Approximately 1 second
+```
 
 The resulting behavior can be summarized as:
 
+```text
 Single report
     ↓
 Temporary RGB control
@@ -279,46 +322,354 @@ Temporary RGB control
 ~1 second
     ↓
 Firmware takeover
+```
 
-
+```text
 10 Hz repeated reports
     ↓
 Continuous RGB control
+```
 
-
+```text
 Stop repeated reports
     ↓
 ~1 second
     ↓
 Firmware takeover
+```
+
+The firmware takeover behavior is important for live streaming because a
+stream must continue transmitting reports rather than sending a single
+frame and stopping.
 
 ---
 
-## 14. Current Streaming Knowledge
+## 14. Streaming Rate Characterization
 
-Real-time RGB control is therefore proven to be possible.
+After confirming that continuous transmission maintains external RGB
+control, the Feature Report transport was tested at progressively higher
+update rates.
 
-The current known-good configuration is:
+The following scheduled rates were successfully sustained:
 
-520-byte RGB Feature Report
-+
-10 Hz continuous transmission
+```text
+10 Hz  → 10.00 FPS
+20 Hz  → 20.00 FPS
+30 Hz  → 30.00 FPS
+31 Hz  → 31.00 FPS
+32 Hz  → 32.00 FPS
+33 Hz  → 33.00 FPS
+```
 
-The following values have not yet been characterized:
+At these rates, the keyboard remained responsive and RGB output remained
+stable.
 
-* Minimum stable update rate
-* Maximum stable update rate
-* Maximum long-term update rate
-* Actual visible frame rate
-* Latency
-* Behavior at higher transmission rates
-* Behavior during long-duration streaming
-
-These will be investigated separately from the key-mapping work.
+The 33 Hz test is the highest rate currently validated as stable.
 
 ---
 
-## 15. Other RK Keyboard PIDs
+## 15. Feature Report Behavior Above 33 Hz
+
+The first tested rate above 33 Hz was 34 Hz.
+
+Observed result:
+
+```text
+Target FPS: 34
+Actual FPS: approximately 15.76
+```
+
+The timing of the underlying `send_feature_report()` call changed
+significantly:
+
+```text
+Average: approximately 63 ms
+Median:  approximately 83 ms
+Minimum: approximately 23 ms
+Maximum: approximately 89 ms
+```
+
+Additional tests produced similar behavior.
+
+35 Hz:
+
+```text
+Target FPS: 35
+Actual FPS: approximately 15.20
+
+Average send time: approximately 65.7 ms
+Median send time:  approximately 82.9 ms
+```
+
+40 Hz:
+
+```text
+Target FPS: 40
+Actual FPS: approximately 14.98
+
+Average send time: approximately 66.7 ms
+Median send time:  approximately 82.9 ms
+```
+
+All of these tests completed with zero reported send errors.
+
+This indicates that the problem is not a normal Feature Report failure.
+Instead, the HID call begins taking substantially longer to complete once
+the requested rate exceeds the currently stable region.
+
+The exact layer responsible for this behavior has not yet been isolated.
+Possible factors include the Windows HID path, the HID library/backend,
+USB scheduling, or device-side flow control.
+
+The current evidence therefore supports the following statement:
+
+> 33 Hz is the highest update rate currently validated as stable on the
+> tested RK M75 under Windows. At 34 Hz, the Feature Report transmission
+> enters a significantly slower blocking behavior and observed throughput
+> drops to approximately 15 Hz.
+
+This should not currently be interpreted as a proven absolute hardware
+maximum.
+
+---
+
+## 16. Unrestricted Transport Stress Test
+
+A separate stress test removed the FPS scheduler completely and called
+`kb.send(frame)` continuously for a fixed duration.
+
+Test duration:
+
+```text
+10 seconds
+```
+
+Observed result:
+
+```text
+Elapsed:    10.083 seconds
+Sent:       154
+Errors:     0
+Actual FPS: 15.27
+```
+
+Timing:
+
+```text
+Average send time: 65.473 ms
+Median send time:  82.797 ms
+Minimum:           24.326 ms
+Maximum:           89.113 ms
+```
+
+This independently confirms that the approximately 15 FPS behavior is
+not caused by the scheduled FPS benchmark.
+
+When the HID transport is pushed continuously without a rate limiter, the
+Feature Report path naturally settles at approximately 15 reports per
+second.
+
+---
+
+## 17. Changing-Frame Stress Test
+
+The unrestricted stress test was repeated while changing the entire RGB
+frame on every transmission.
+
+The test cycled through several full-frame colors:
+
+```text
+Red
+Green
+Blue
+Yellow
+Magenta
+Cyan
+White
+```
+
+Observed result:
+
+```text
+Elapsed:    10.009 seconds
+Sent:       150
+Errors:     0
+Actual FPS: 14.99
+```
+
+Timing:
+
+```text
+Average send time: 66.723 ms
+Median send time:  82.882 ms
+Minimum:           23.475 ms
+Maximum:           89.215 ms
+```
+
+All colors were successfully displayed by the keyboard.
+
+There was no visible flickering, but the transitions were not smooth at
+approximately 15 FPS.
+
+The result closely matches the fixed-frame stress test.
+
+This indicates that the transport slowdown is not caused by repeatedly
+sending an unchanged framebuffer.
+
+---
+
+## 18. 33 Hz Continuous RGB Animation
+
+A proper scheduled animation was then tested at 33 Hz.
+
+The animation continuously changed the RGB values of the full framebuffer
+using a smooth color cycle.
+
+Test duration:
+
+```text
+30 seconds
+```
+
+Observed result:
+
+```text
+Duration:    30.000 seconds
+Sent:        990
+Errors:      0
+Actual FPS:  33.00
+```
+
+The RGB transitions were visually smooth on the physical keyboard.
+
+This confirms that 33 Hz is not merely a numerical transport result:
+continuously changing RGB frames can actually be displayed smoothly by the
+keyboard at that rate.
+
+---
+
+## 19. Five-Minute Streaming Stability Test
+
+The 33 Hz animation was extended from 30 seconds to five minutes to test
+long-duration stability.
+
+Observed result:
+
+```text
+Duration:    300.000 seconds
+Sent:        9900
+Errors:      0
+Actual FPS:  33.00
+```
+
+The keyboard remained visually stable throughout the complete five-minute
+test.
+
+No transmission errors were observed.
+
+This provides the current long-duration validation for 33 Hz streaming.
+
+---
+
+## 20. RGB Streaming API
+
+After validating the streaming behavior experimentally, the timing and
+continuous transmission logic were moved into the library.
+
+The library now provides an `RGBStream` implementation.
+
+The preferred API is:
+
+```python
+from rkm75 import Frame, RKM75
+
+frame = Frame()
+
+with RKM75() as kb:
+    with kb.stream(fps=33) as stream:
+        while True:
+            frame.fill((255, 0, 0))
+            stream.send(frame)
+```
+
+The streaming layer handles the update timing while the caller remains
+responsible for generating or modifying the `Frame`.
+
+The current implementation limits the configured streaming rate to 33 Hz
+because this is the highest rate currently validated as stable.
+
+A request above 33 Hz is rejected by the streaming API rather than being
+allowed to enter the known problematic transport region.
+
+---
+
+## 21. Streaming API Validation
+
+The new library-level streaming API was tested using a continuously
+changing RGB animation.
+
+Test configuration:
+
+```text
+Target FPS: 33
+Duration:   approximately 30 seconds
+```
+
+Observed result:
+
+```text
+Actual FPS: approximately 32.88
+Errors:     0
+Visual output: smooth
+```
+
+The small difference between the requested 33 FPS and the measured
+32.88 FPS is due to normal timing and measurement overhead.
+
+This confirms that the `RGBStream` abstraction reproduces the behavior of
+the previously validated direct streaming implementation.
+
+The higher-level API:
+
+```python
+with RKM75() as kb:
+    with kb.stream(fps=33) as stream:
+        stream.send(frame)
+```
+
+therefore successfully provides the same stable streaming behavior without
+requiring applications to implement their own timing loop.
+
+---
+
+## 22. Current Streaming Conclusions
+
+The current evidence establishes the following:
+
+* A single RGB Feature Report does not maintain external lighting control.
+* The keyboard firmware reclaims lighting control after approximately one
+  second when external transmission stops.
+* Continuous Feature Report transmission maintains external RGB control.
+* 10 Hz continuous transmission is sufficient to maintain a static RGB
+  state.
+* Scheduled streaming is stable through 33 Hz on the tested RK M75 under
+  Windows.
+* 33 Hz continuously changing RGB animation is visually smooth.
+* 33 Hz remained stable for five minutes and 9900 transmitted frames.
+* At 34 Hz, Feature Report transmission enters a slower blocking behavior.
+* Tests at 34 Hz, 35 Hz, and 40 Hz produce approximately 15 FPS instead of
+  the requested rate.
+* An unrestricted stress test also settles at approximately 15 FPS.
+* Changing the framebuffer contents on every transmission does not remove
+  the approximately 15 FPS transport behavior.
+* The current streaming API therefore uses 33 Hz as its maximum supported
+  rate.
+
+The exact cause of the transport behavior above 33 Hz remains unresolved.
+
+---
+
+## 23. Other RK Keyboard PIDs
 
 The official RK configuration contains many other RK keyboard PIDs.
 
@@ -330,9 +681,11 @@ of compatibility with this project**.
 
 Only the following device has been experimentally validated:
 
+```text
 VID:    0x258A
 PID:    0x0163
 Device: RK-M75RGB New layout
+```
 
 Other PIDs should be treated as unverified.
 
@@ -345,3 +698,6 @@ Researchers interested in another RK keyboard should independently verify:
 * Framebuffer layout
 * Key mapping
 * Firmware behavior
+* Streaming behavior
+
+```
