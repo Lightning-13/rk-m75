@@ -75,3 +75,19 @@ def test_payload_capacity():
         assert report[4] == 0x10 + NATIVE_PAYLOAD_SIZE
 
     assert reports[-1][4] == 0x10 + 7
+
+def test_129_byte_stream_packetizes_as_13_88_0a():
+    stream = bytes(range(129))
+
+    reports = packetize(stream)
+
+    assert len(reports) == 10
+
+    for sequence, report in enumerate(reports):
+        assert len(report) == REPORT_SIZE
+        assert report[:3] == bytes((0x13, 0x88, 0x0A))
+        assert report[3] == sequence
+
+    validate_transaction(stream, reports)
+
+    assert reconstruct(reports) == stream

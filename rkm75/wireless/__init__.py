@@ -24,6 +24,16 @@ from .stream import (
     WirelessKeepalive,
     WirelessRGBStream,
 )
+from .encoder import (
+    NativeGroup,
+    SIX_GROUP_LAYOUT,
+    TWELVE_GROUP_LAYOUT,
+    encode_native_groups,
+    frame_to_six_groups,
+    encode_frame_six_groups,
+    frame_to_twelve_groups,
+    encode_frame_twelve_groups,
+)
 
 __all__ = [
     "DYNAMIC_FPS",
@@ -38,4 +48,12 @@ __all__ = [
     "reconstruct",
     "report_count_for_stream",
     "validate_transaction",
+    "NativeGroup",
+    "SIX_GROUP_LAYOUT",
+    "TWELVE_GROUP_LAYOUT",
+    "encode_native_groups",
+    "frame_to_six_groups",
+    "encode_frame_six_groups",
+    "frame_to_twelve_groups",
+    "encode_frame_twelve_groups",
 ]

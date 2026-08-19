@@ -1,5 +1,5 @@
 from rkm75.wireless.device import RKM75Wireless
-
+import pytest
 
 def test_wireless_device_requires_open_for_send():
     device = RKM75Wireless()
@@ -19,3 +19,9 @@ def test_wireless_device_default_gap():
 
     assert device.gap_ms == 7.0
     assert device.transport is None
+
+def test_wireless_device_keepalive_requires_open():
+    device = RKM75Wireless()
+
+    with pytest.raises(RuntimeError):
+        device.send_keepalive()

@@ -9,7 +9,7 @@ from ..frame import Frame
 RGB = tuple[int, int, int]
 
 
-# Exact 81-LED partition recovered from the wireless captures.
+# Exact 81-LED partition recovered from the validated 13 88 08 captures.
 #
 # These are native LED-map indices, not physical key names.
 SIX_GROUP_LAYOUT = (
@@ -36,6 +36,53 @@ SIX_GROUP_LAYOUT = (
     (
         0x05, 0x0B, 0x11, 0x23, 0x35, 0x3B, 0x41,
         0x53, 0x59, 0x5F,
+    ),
+)
+
+
+# Exact 81-LED partition recovered from the captured 13 88 0A transaction.
+#
+# These are native LED-map indices, not physical key names.
+#
+# The grouping was recovered by assigning a deterministic 12-color pattern
+# through the official software and reconstructing the resulting 129-byte
+# native stream.
+TWELVE_GROUP_LAYOUT = (
+    (
+        0x00, 0x4E, 0x3D, 0x2C, 0x1B, 0x10, 0x0B,
+    ),
+    (
+        0x0C, 0x54, 0x43, 0x32, 0x21, 0x16, 0x11,
+    ),
+    (
+        0x12, 0x01, 0x49, 0x38, 0x27, 0x1C, 0x23,
+    ),
+    (
+        0x18, 0x07, 0x4F, 0x3E, 0x2D, 0x22, 0x35,
+    ),
+    (
+        0x1E, 0x0D, 0x5B, 0x44, 0x33, 0x28, 0x3B,
+    ),
+    (
+        0x24, 0x13, 0x02, 0x4A, 0x39, 0x2E, 0x41,
+    ),
+    (
+        0x2A, 0x19, 0x08, 0x50, 0x3F, 0x34, 0x53,
+    ),
+    (
+        0x30, 0x1F, 0x0E, 0x5C, 0x45, 0x3A, 0x59,
+    ),
+    (
+        0x36, 0x25, 0x14, 0x03, 0x51, 0x40, 0x5F,
+    ),
+    (
+        0x3C, 0x2B, 0x1A, 0x09, 0x52, 0x5D,
+    ),
+    (
+        0x42, 0x31, 0x20, 0x0F, 0x04, 0x58,
+    ),
+    (
+        0x48, 0x37, 0x26, 0x15, 0x0A, 0x05,
     ),
 )
 
@@ -118,14 +165,11 @@ def encode_native_groups(
     return bytes(stream)
 
 
-def frame_to_six_groups(frame: Frame) -> tuple[NativeGroup, ...]:
-    """
-    Convert a Frame to the recovered six-group representation.
-
-    Every LED in a native group must currently have the same RGB value.
-    This deliberately rejects arbitrary per-key RGB that cannot be
-    represented by the six-group native format without information loss.
-    """
+def _frame_to_groups(
+    frame: Frame,
+    layout,
+    layout_name: str,
+) -> tuple[NativeGroup, ...]:
     if not isinstance(frame, Frame):
         raise TypeError(
             "frame must be an rkm75.frame.Frame instance."
@@ -134,7 +178,7 @@ def frame_to_six_groups(frame: Frame) -> tuple[NativeGroup, ...]:
     data = frame.bytes
     groups = []
 
-    for led_indices in SIX_GROUP_LAYOUT:
+    for led_indices in layout:
         colors = {
             tuple(
                 data[index * 3:index * 3 + 3]
@@ -144,7 +188,7 @@ def frame_to_six_groups(frame: Frame) -> tuple[NativeGroup, ...]:
 
         if len(colors) != 1:
             raise ValueError(
-                "Frame cannot be represented by the six-group "
+                f"Frame cannot be represented by the {layout_name} "
                 "wireless layout without losing per-LED RGB information."
             )
 
@@ -158,10 +202,63 @@ def frame_to_six_groups(frame: Frame) -> tuple[NativeGroup, ...]:
     return tuple(groups)
 
 
+def frame_to_six_groups(
+    frame: Frame,
+) -> tuple[NativeGroup, ...]:
+    """
+    Convert a Frame to the recovered six-group representation.
+
+    Every LED in a native group must currently have the same RGB value.
+    """
+    return _frame_to_groups(
+        frame,
+        SIX_GROUP_LAYOUT,
+        "six-group",
+    )
+
+
 def encode_frame_six_groups(frame: Frame) -> bytes:
     """
-    Encode a Frame using the currently recovered six-group format.
+    Encode a Frame using the currently hardware-validated
+    six-group 13 88 08 format.
     """
     return encode_native_groups(
         frame_to_six_groups(frame)
     )
+
+
+def frame_to_twelve_groups(
+    frame: Frame,
+) -> tuple[NativeGroup, ...]:
+    """
+    Convert a Frame to the recovered twelve-group 13 88 0A
+    representation.
+
+    This is currently experimental. Each recovered native group must
+    have one uniform RGB color.
+    """
+    return _frame_to_groups(
+        frame,
+        TWELVE_GROUP_LAYOUT,
+        "twelve-group",
+    )
+
+
+def encode_frame_twelve_groups(frame: Frame) -> bytes:
+    """
+    Encode a Frame using the captured 13 88 0A twelve-group format.
+
+    The resulting 129-byte stream packetizes automatically into
+    ten 20-byte reports because each report carries at most 14
+    native-data bytes.
+    """
+    stream = encode_native_groups(
+        frame_to_twelve_groups(frame)
+    )
+
+    if len(stream) != 129:
+        raise ValueError(
+            f"Expected 129-byte 13 88 0A stream, got {len(stream)}."
+        )
+
+    return stream
