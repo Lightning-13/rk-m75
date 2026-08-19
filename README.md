@@ -2,11 +2,13 @@
 
 An open-source Python library for controlling the RGB lighting on the Royal Kludge RK M75 keyboard without the official Windows software.
 
-> **Project Status:** Core reverse engineering and the standalone RK M75 RGB control library are complete. RGB control, the 81-key mapping, continuous RGB control, and 33 Hz live RGB streaming have been validated on hardware. The public API has been hardened and covered by automated tests. Community hardware testing is the next step before OpenRGB/SignalRGB integration.
+> **Project Status:** The USB wired RGB control path is complete and validated on hardware. A separate 2.4 GHz wireless RGB path is also implemented, with the currently recovered transaction family validated on hardware. Wireless protocol reverse engineering remains ongoing.
 
 ---
 
 ## Features
+
+### USB wired RGB
 
 - Discover the RK M75 RGB HID interface
 - Communicate through USB HID Feature Reports
@@ -21,8 +23,26 @@ An open-source Python library for controlling the RGB lighting on the Royal Klud
 - Provide a reusable `RGBStream` API
 - Validate RGB frame and streaming inputs
 - Provide explicit HID transport lifecycle handling
-- Automated API regression test suite
-- Document the reverse-engineered protocol and firmware behavior
+
+### 2.4 GHz wireless RGB
+
+- Discover the RK M75 2.4 GHz RGB HID interface
+- Communicate through the recovered wireless HID transport
+- Encode the recovered six-group RGB representation
+- Generate the validated 105-byte native RGB stream
+- Packetize the native stream into `13 88 XX` HID reports
+- Validate report checksums and stream reconstruction
+- Stream changing RGB group states
+- Maintain RGB control with wireless keepalive transmission
+- Hardware-validated `13 88 08` full-keyboard RGB transactions
+- Hardware-validated smooth 14 FPS wireless RGB animation
+
+### Project tooling
+
+- Automated API and protocol regression tests
+- Reverse-engineering captures and documentation
+- Hardware validation scripts
+- Documented protocol and firmware behavior
 
 ---
 
@@ -31,8 +51,9 @@ An open-source Python library for controlling the RGB lighting on the Royal Klud
 - Control RK M75 RGB lighting from Python
 - Eliminate the need for the proprietary RK Windows software
 - Document the USB HID lighting protocol
+- Document the recovered 2.4 GHz wireless RGB protocol
 - Build a reusable open-source RGB control library
-- Provide a reliable real-time RGB streaming interface
+- Provide reliable real-time RGB streaming interfaces
 - Eventually support integration with projects such as OpenRGB and SignalRGB
 
 Linux support is currently untested and is not an immediate development priority.
@@ -41,7 +62,11 @@ Linux support is currently untested and is not an immediate development priority
 
 # Current Status
 
-## Reverse Engineering
+## USB Wired RGB
+
+The original USB RGB control path is considered complete for the tested RK M75.
+
+### Reverse Engineering
 
 - [x] Identified USB transport
 - [x] Located RGB Feature Report
@@ -67,7 +92,7 @@ Linux support is currently untested and is not an immediate development priority
 - [x] Validated smooth changing-frame RGB animation at 33 Hz
 - [x] Validated 5-minute continuous RGB streaming
 
-## Implementation
+### Implementation
 
 - [x] HID device discovery
 - [x] HID transport layer
@@ -93,24 +118,115 @@ Linux support is currently untested and is not an immediate development priority
 
 ---
 
+## 2.4 GHz Wireless RGB
+
+The project also contains a separate wireless RGB implementation under:
+
+```text
+rkm75/wireless/
+```
+
+The reverse-engineering workspace and supporting documentation are kept under:
+
+```text
+2.4ghz/
+```
+
+The current wireless implementation deliberately covers only the recovered and hardware-validated RGB transaction path. It should not be considered a complete reverse engineering of the RK M75 wireless protocol.
+
+### Current validated wireless path
+
+The recovered RGB transaction family uses:
+
+```text
+13 88 XX
+```
+
+where `XX` identifies the number of 20-byte HID reports in the transaction.
+
+The currently validated full-keyboard RGB transaction is:
+
+```text
+13 88 08
+```
+
+with:
+
+```text
+8 × 20-byte HID reports
+105-byte native RGB stream
+14 bytes of native data per report
+additive report checksum
+```
+
+The native RGB stream contains six RGB group records covering the recovered 81 physical LED indices.
+
+### Wireless implementation status
+
+- [x] Identify the wireless RGB HID collection
+- [x] Identify VID `0x258A`
+- [x] Identify PID `0x0148`
+- [x] Identify Usage Page `0xFF02`
+- [x] Identify Usage `0x0002`
+- [x] Recover the `13 88 XX` report family
+- [x] Recover the 20-byte report structure
+- [x] Recover report sequence numbering
+- [x] Recover report payload length encoding
+- [x] Recover additive report checksum
+- [x] Recover the six native RGB groups
+- [x] Recover 81 unique native LED indices
+- [x] Recover the 105-byte full-keyboard native stream
+- [x] Implement native stream encoding
+- [x] Implement report packetization
+- [x] Implement report validation and reconstruction
+- [x] Implement wireless HID transport
+- [x] Implement wireless device lifecycle
+- [x] Implement wireless RGB streaming
+- [x] Implement wireless keepalive
+- [x] Validate the full `13 88 08` transaction on hardware
+- [x] Validate smooth wireless RGB animation at 14 FPS
+- [ ] Fully reverse engineer all `13 88 XX` transaction types
+- [ ] Recover arbitrary per-key wireless RGB encoding
+- [ ] Recover wireless lighting effects
+- [ ] Determine the complete wireless protocol
+- [ ] OpenRGB integration
+- [ ] SignalRGB integration
+
+### Important wireless limitation
+
+The current wireless encoder represents the keyboard using six native RGB groups.
+
+It does **not** yet provide a proven arbitrary per-key wireless RGB encoder equivalent to the wired `Frame` API.
+
+The current implementation therefore focuses on the recovered six-group representation and the validated full-keyboard `13 88 08` transaction.
+
+More detailed wireless findings are documented in:
+
+```text
+2.4ghz/docs/findings.md
+2.4ghz/docs/protocol.md
+```
+
+---
+
 # Important Firmware Behavior
 
-The RK M75 does not permanently retain an externally supplied RGB framebuffer after receiving a single Feature Report.
+The RK M75 does not permanently retain an externally supplied RGB framebuffer after receiving a single USB Feature Report.
 
 With the official RK software closed:
 
-````text
+```text
 Single Feature Report
-    |
-    v
+        |
+        v
 Requested RGB state
-    |
-    v
-~1 second
-    |
-    v
+        |
+        v
+     ~1 second
+        |
+        v
 Keyboard firmware reclaims lighting control
-````
+```
 
 Setting the official software's lighting mode to **Off** does not prevent this behavior. A single externally supplied RGB frame still disappears after approximately one second.
 
@@ -122,7 +238,7 @@ When transmission stopped, the keyboard reclaimed the lighting state after appro
 
 ---
 
-# Streaming Behavior
+# Wired Streaming Behavior
 
 Continuous Feature Report transmission can be used to maintain control of the RGB framebuffer and produce live RGB animations.
 
@@ -174,13 +290,50 @@ The current evidence therefore shows:
 
 This should not currently be interpreted as a proven absolute hardware maximum. The exact layer responsible for the behavior has not yet been isolated.
 
-For this reason, the current `RGBStream` implementation limits the configured streaming rate to a maximum of 33 Hz.
+For this reason, the current wired `RGBStream` implementation limits the configured streaming rate to a maximum of 33 Hz.
 
 ---
 
-# Streaming API
+# Wireless Streaming Behavior
 
-The library provides an `RGBStream` interface for continuous RGB transmission.
+The currently validated wireless dynamic RGB path uses:
+
+```text
+FPS:                 14
+Inter-report gap:    7 ms
+Transaction:         13 88 08
+Native stream:       105 bytes
+Reports:             8 × 20 bytes
+```
+
+A 20-second hardware validation produced:
+
+```text
+Duration:            20.000 s
+Frames sent:         280
+Average FPS:         14.000
+TX average:          ~56.5 ms
+TX minimum:          ~55.0 ms
+TX maximum:          ~58.0 ms
+```
+
+The keyboard remained visually smooth throughout the test with:
+
+```text
+No flashing
+No jumping
+No incorrect colors
+```
+
+The wireless stream is therefore considered **hardware validated at 14 FPS with a 7 ms inter-report gap**.
+
+This is a validated operating point, not a claimed maximum wireless update rate.
+
+---
+
+# Wired Streaming API
+
+The library provides an `RGBStream` interface for continuous wired RGB transmission.
 
 ## Basic RGB control
 
@@ -210,9 +363,33 @@ with RKM75() as kb:
 
 The streaming layer handles the update timing while the caller remains responsible for generating or modifying the `Frame`.
 
-This separation allows future applications to provide RGB frames from external sources without needing to implement the HID timing logic themselves.
+---
 
-The current implementation accepts streaming rates up to 33 Hz.
+# Wireless API
+
+The wireless implementation is exposed separately from the wired API.
+
+The current wireless device API works with the recovered six-group representation rather than arbitrary per-key `Frame` objects.
+
+A simplified wireless usage pattern is:
+
+```python
+from rkm75.wireless import RKM75Wireless
+
+colors = (
+    (255, 0, 0),
+    (255, 128, 0),
+    (255, 255, 0),
+    (0, 255, 0),
+    (0, 128, 255),
+    (180, 0, 255),
+)
+
+with RKM75Wireless() as keyboard:
+    keyboard.send_frame(colors)
+```
+
+The wireless API and exact implementation details should be treated as experimental while wireless reverse engineering continues.
 
 ---
 
@@ -251,8 +428,8 @@ The complete 81-key mapping was extracted from this configuration and validated 
 For example:
 
 ```text
-A     -> LED 9
-SPACE -> LED 35
+A      -> LED 9
+SPACE  -> LED 35
 ```
 
 Both mappings were independently verified through hardware testing.
@@ -275,12 +452,20 @@ However:
 
 > **Presence of a PID in the official configuration does not mean that this project supports that keyboard.**
 
-The protocol, packet layout, framebuffer layout, key mapping, firmware behavior, and streaming behavior have only been validated on:
+The wired protocol, packet layout, framebuffer layout, key mapping, firmware behavior, and streaming behavior have only been validated on:
 
 ```text
 VID 0x258A
 PID 0x0163
 RK-M75RGB New layout
+```
+
+The current wireless RGB implementation has been validated separately on:
+
+```text
+VID 0x258A
+PID 0x0148
+RK M75 wireless RGB HID interface
 ```
 
 Other RK keyboards should be considered **unverified** and must be tested independently.
@@ -292,68 +477,150 @@ The same RK software driver/configuration system may work with other devices lis
 # Repository Layout
 
 ```text
-captures/       Wireshark captures used during reverse engineering
-docs/           Protocol documentation and findings
-examples/       Example programs and hardware tests
-json/           Exported Wireshark JSON captures
-reports/        Generated analysis output
-rkm75/          Python library
-tests/          Unit tests
-tools/          Reverse-engineering utilities
+2.4ghz/
+    README.md
+    captures/
+    docs/
+        findings.md
+        protocol.md
+    scripts/
+        hardware_keepalive_test.py
+        hardware_smoke_test.py
+        validate_native_13_88_08.py
+
+captures/
+    USB wired Wireshark captures
+
+docs/
+    USB wired protocol documentation and findings
+
+examples/
+    Wired library examples and hardware tests
+
+reports/
+    Generated analysis output
+
+rkm75/
+    Core Python library
+    wireless/
+        Wireless RGB implementation
+
+tests/
+    Wired and wireless automated regression tests
+
+tools/
+    Reverse-engineering utilities
 ```
+
+The `2.4ghz/` directory contains research material and documentation for the wireless protocol.
+
+The production-facing Python implementation lives under:
+
+```text
+rkm75/wireless/
+```
+
+The repository intentionally does not retain the large collection of historical experimental scripts used during wireless reverse engineering. Their relevant conclusions have been consolidated into the wireless documentation.
 
 ---
 
 # Project Architecture
 
+## Wired
+
 ```text
-                +------------------+
-                |    Application   |
-                +------------------+
-                         |
-                         v
-                +------------------+
-                |      RKM75       |
-                +------------------+
-                         |
-                         v
-                +------------------+
-                |    RGBStream     |
-                +------------------+
-                         |
-                         v
-                +------------------+
-                |   Packet Builder |
-                +------------------+
-                         |
-                         v
-                +------------------+
-                |    Framebuffer   |
-                +------------------+
-                         |
-                         v
-                +------------------+
-                |    Transport     |
-                +------------------+
-                         |
-                         v
-                +-------------------+
-                | HID Feature Report|
-                +-------------------+
-                         |
-                         v
-                +------------------+
-                |     RK M75       |
-                +------------------+
+                 +------------------+
+                 |    Application   |
+                 +------------------+
+                          |
+                          v
+                 +------------------+
+                 |      RKM75       |
+                 +------------------+
+                          |
+                          v
+                 +------------------+
+                 |    RGBStream     |
+                 +------------------+
+                          |
+                          v
+                 +------------------+
+                 |   Packet Builder |
+                 +------------------+
+                          |
+                          v
+                 +------------------+
+                 |    Framebuffer   |
+                 +------------------+
+                          |
+                          v
+                 +------------------+
+                 |    Transport     |
+                 +------------------+
+                          |
+                          v
+                 +-------------------+
+                 | HID Feature Report|
+                 +-------------------+
+                          |
+                          v
+                     +---------+
+                     | RK M75  |
+                     +---------+
 ```
 
-`RGBStream` provides the timing layer for continuous transmission while the existing packet and transport layers remain responsible for turning the framebuffer into USB HID Feature Reports.
+## Wireless
+
+```text
+                 +------------------+
+                 |    Application   |
+                 +------------------+
+                          |
+                          v
+                 +------------------+
+                 | RKM75Wireless    |
+                 +------------------+
+                          |
+                          v
+                 +------------------+
+                 | Wireless Encoder |
+                 +------------------+
+                          |
+                          v
+                 +------------------+
+                 | Native RGB Stream|
+                 +------------------+
+                          |
+                          v
+                 +------------------+
+                 |   Packetization  |
+                 +------------------+
+                          |
+                          v
+                 +------------------+
+                 |   13 88 XX HID   |
+                 |      Reports     |
+                 +------------------+
+                          |
+                          v
+                 +------------------+
+                 | Wireless HID     |
+                 | Transport        |
+                 +------------------+
+                          |
+                          v
+                     +---------+
+                     | RK M75  |
+                     +---------+
+```
+
+The wired and wireless paths are intentionally separate because they use different HID interfaces, transport mechanisms, and RGB representations.
 
 ---
 
 # Examples
 
-Examples are numbered roughly in the order they were developed during reverse engineering.
+The wired examples are numbered roughly in the order they were developed during reverse engineering.
 
 ```text
 examples/
@@ -413,15 +680,11 @@ python examples/06_test_keymap_rows.py
 python examples/07_keepalive.py
 ```
 
-The keepalive example currently transmits at 10 Hz.
-
 ### Benchmark RGB streaming
 
 ```bash
 python examples/08_benchmark_stream.py --fps 33 --duration 30
 ```
-
-This measures scheduled Feature Report streaming performance.
 
 ### Stress-test the HID transport
 
@@ -429,15 +692,11 @@ This measures scheduled Feature Report streaming performance.
 python examples/09_stress_stream.py --duration 10
 ```
 
-This removes the FPS limiter and measures the behavior of the HID Feature Report transport when pushed continuously.
-
 ### Stress-test changing RGB frames
 
 ```bash
 python examples/10_stress_changing_frames.py --duration 10
 ```
-
-This continuously changes the RGB framebuffer while measuring transport throughput.
 
 ### Test smooth 33 Hz RGB animation
 
@@ -445,25 +704,58 @@ This continuously changes the RGB framebuffer while measuring transport throughp
 python examples/11_animation_33hz.py
 ```
 
-This performs a continuously changing full-frame RGB animation.
-
-The validation version of this test runs for five minutes.
-
-### Use the streaming API
+### Use the wired streaming API
 
 ```bash
 python examples/12_stream.py
 ```
 
-This demonstrates the library's `RGBStream` interface.
+---
+
+# Wireless Hardware Validation
+
+The wireless implementation includes dedicated hardware validation scripts.
+
+### Offline protocol validation
+
+This does not communicate with the keyboard:
+
+```bash
+python 2.4ghz/scripts/validate_native_13_88_08.py
+```
+
+### Wireless RGB smoke test
+
+```bash
+python 2.4ghz/scripts/hardware_smoke_test.py
+```
+
+The current validated baseline is:
+
+```text
+14 FPS
+7 ms inter-report gap
+20 second hardware test
+13 88 08 transaction
+8 × 20-byte HID reports
+105-byte native stream
+```
+
+### Wireless keepalive validation
+
+```bash
+python 2.4ghz/scripts/hardware_keepalive_test.py
+```
+
+These scripts require the RK M75 wireless receiver and are intended for hardware testing rather than automated CI.
 
 ---
 
 # Automated Tests
 
-The project includes a hardware-independent regression test suite covering the core public API and protocol layers.
+The project includes a hardware-independent regression test suite covering the wired and wireless public APIs and protocol layers.
 
-Current test coverage includes:
+Current test modules include:
 
 ```text
 tests/
@@ -473,39 +765,58 @@ tests/
     test_packet.py
     test_stream.py
     test_transport.py
+    test_wireless_device.py
+    test_wireless_encoder.py
+    test_wireless_protocol.py
+    test_wireless_stream.py
+    test_wireless_transport.py
 ```
 
 The current suite contains:
 
 ```text
-54 tests
+73 tests
 ```
 
-All 54 tests pass on the development environment.
+The complete suite currently passes on the development environment:
+
+```text
+73 passed
+```
 
 The tests cover:
 
-* Public `RKM75` API behavior
-* Device discovery delegation
-* Device lifecycle and context management
-* RGB framebuffer creation
-* RGB input validation
-* LED index validation
-* Logical key mapping
-* 81-key mapping integrity
-* Packet structure and size
-* Feature Report padding
-* Packet file output
-* RGBStream FPS validation
-* RGBStream lifecycle
-* RGBStream timing behavior
-* HID transport validation
-* HID transport lifecycle
-* Closed-transport behavior
+- Public `RKM75` API behavior
+- Device discovery delegation
+- Device lifecycle and context management
+- RGB framebuffer creation
+- RGB input validation
+- LED index validation
+- Logical key mapping
+- 81-key mapping integrity
+- Wired packet structure and size
+- Feature Report padding
+- Packet file output
+- Wired RGBStream FPS validation
+- Wired RGBStream lifecycle
+- Wired RGBStream timing behavior
+- HID transport validation
+- HID transport lifecycle
+- Closed-transport behavior
+- Wireless transaction structure
+- Wireless report count and payload capacity
+- Wireless native stream reconstruction
+- Wireless six-group LED layout
+- Wireless group color encoding
+- Wireless report packetization
+- Wireless HID transport validation
+- Wireless wireless-device lifecycle
+- Wireless RGB streaming
+- Wireless keepalive behavior
 
 The automated tests do not require a physical RK M75.
 
-Hardware validation is performed separately using the numbered examples.
+Hardware validation is performed separately using the dedicated examples and wireless scripts.
 
 ---
 
@@ -513,96 +824,153 @@ Hardware validation is performed separately using the numbered examples.
 
 ## Milestone 1 — HID Discovery
 
-* [x] Discover RGB HID interface
-* [x] Open transport
+- [x] Discover wired RGB HID interface
+- [x] Discover wireless RGB HID interface
+- [x] Open wired transport
+- [x] Open wireless transport
 
-## Milestone 2 — Feature Report Replay
+## Milestone 2 — Wired Feature Report Replay
 
-* [x] Capture vendor RGB Feature Report
-* [x] Extract report
-* [x] Replay report successfully
+- [x] Capture vendor RGB Feature Report
+- [x] Extract report
+- [x] Replay report successfully
 
-## Milestone 3 — Packet Generation
+## Milestone 3 — Wired Packet Generation
 
-* [x] Reconstruct Feature Report structure
-* [x] Generate RGB Feature Reports from Python
-* [x] Send generated RGB frames successfully
+- [x] Reconstruct Feature Report structure
+- [x] Generate RGB Feature Reports from Python
+- [x] Send generated RGB frames successfully
 
-## Milestone 4 — Key Mapping
+## Milestone 4 — Wired Key Mapping
 
-* [x] Locate vendor keyboard layout
-* [x] Derive 81-key RGB mapping
-* [x] Implement logical key API
-* [x] Validate all 81 RGB positions
-* [x] Document firmware takeover behavior
-* [x] Validate 10 Hz continuous control
+- [x] Locate vendor keyboard layout
+- [x] Derive 81-key RGB mapping
+- [x] Implement logical key API
+- [x] Validate all 81 RGB positions
+- [x] Document firmware takeover behavior
+- [x] Validate 10 Hz continuous control
 
-## Milestone 5 — Live Streaming
+## Milestone 5 — Wired Live Streaming
 
-* [x] Characterize stable streaming rates
-* [x] Characterize Feature Report behavior above 33 Hz
-* [x] Measure effective FPS
-* [x] Validate long-duration stability
-* [x] Build streaming API
-* [x] Validate smooth RGB animations
+- [x] Characterize stable streaming rates
+- [x] Characterize Feature Report behavior above 33 Hz
+- [x] Measure effective FPS
+- [x] Validate long-duration stability
+- [x] Build streaming API
+- [x] Validate smooth RGB animations
 
-## Milestone 6 — API Hardening & Reliability
+## Milestone 6 — Wireless Protocol Recovery
 
-* [x] Define public package API
-* [x] Validate RGB frame inputs
-* [x] Validate LED indices
-* [x] Validate RGBStream FPS inputs
-* [x] Harden HID transport lifecycle
-* [x] Add device unit tests
-* [x] Add frame unit tests
-* [x] Add packet unit tests
-* [x] Add stream unit tests
-* [x] Add transport unit tests
-* [x] Add keymap regression tests
-* [x] Validate hardened implementation on hardware
-* [x] Revalidate 33 Hz streaming stability
-* [x] Revalidate 81-key RGB mapping
-* [x] Revalidate continuous RGB control
-* [x] Confirm 54 automated tests pass
+- [x] Identify wireless RGB HID interface
+- [x] Recover `13 88 XX` transaction family
+- [x] Recover 20-byte report structure
+- [x] Recover report sequence field
+- [x] Recover payload length field
+- [x] Recover additive checksum
+- [x] Recover six native RGB groups
+- [x] Recover 81 unique native LED indices
+- [x] Recover 105-byte full-keyboard native stream
+- [x] Validate `13 88 08` on hardware
+- [x] Validate smooth 14 FPS wireless animation
+- [ ] Fully characterize shorter `13 88 XX` transactions
+- [ ] Recover arbitrary per-key wireless RGB encoding
+- [ ] Recover wireless effects
+- [ ] Determine complete wireless protocol
+
+## Milestone 7 — API Hardening & Reliability
+
+- [x] Define public package API
+- [x] Validate RGB frame inputs
+- [x] Validate LED indices
+- [x] Validate RGBStream FPS inputs
+- [x] Harden HID transport lifecycle
+- [x] Add device unit tests
+- [x] Add frame unit tests
+- [x] Add packet unit tests
+- [x] Add stream unit tests
+- [x] Add transport unit tests
+- [x] Add keymap regression tests
+- [x] Add wireless protocol tests
+- [x] Add wireless encoder tests
+- [x] Add wireless transport tests
+- [x] Add wireless device tests
+- [x] Add wireless stream tests
+- [x] Validate hardened implementation on hardware
+- [x] Revalidate 33 Hz wired streaming stability
+- [x] Revalidate 81-key wired RGB mapping
+- [x] Revalidate continuous wired RGB control
+- [x] Validate wireless `13 88 08` transaction
+- [x] Confirm 73 automated tests pass
 
 ## Future
 
-* [ ] Community testing on additional RK M75 systems
-* [ ] OpenRGB integration
-* [ ] SignalRGB integration
-* [ ] Additional RK keyboard models
-* [ ] Linux support
+- [ ] Community testing on additional RK M75 systems
+- [ ] Complete 2.4 GHz protocol reverse engineering
+- [ ] Arbitrary per-key wireless RGB control
+- [ ] Wireless lighting effects
+- [ ] OpenRGB integration
+- [ ] SignalRGB integration
+- [ ] Additional RK keyboard models
+- [ ] Linux support
 
 ---
 
 # Protocol Summary
 
-| Property              | Value                  |
-| --------------------- | ---------------------- |
-| Transport             | USB HID Feature Report |
-| Vendor ID             | `0x258A`               |
-| Product ID            | `0x0163`               |
-| Device                | RK-M75RGB New layout   |
-| Report ID             | `9`                    |
-| Report Size           | `520 bytes`            |
-| Interface             | `MI_01` / Interface 1  |
-| Usage Page            | `0xFF02`               |
-| Lighting packet type  | `0x08`                 |
-| Status packet type    | `0x0B`                 |
-| RGB framebuffer       | `126 RGB entries`      |
-| Mapped physical keys  | `81`                   |
-| Validated stream rate | `33 Hz`                |
+## USB Wired
 
-More detailed protocol information is available in:
+| Property | Value |
+| --- | --- |
+| Transport | USB HID Feature Report |
+| Vendor ID | `0x258A` |
+| Product ID | `0x0163` |
+| Device | RK-M75RGB New layout |
+| Report ID | `9` |
+| Report Size | `520 bytes` |
+| Interface | `MI_01` / Interface 1 |
+| Usage Page | `0xFF02` |
+| Lighting packet type | `0x08` |
+| Status packet type | `0x0B` |
+| RGB framebuffer | `126 RGB entries` |
+| Mapped physical keys | `81` |
+| Validated stream rate | `33 Hz` |
+
+## 2.4 GHz Wireless
+
+| Property | Value |
+| --- | --- |
+| Transport | Wireless HID |
+| Vendor ID | `0x258A` |
+| Product ID | `0x0148` |
+| Usage Page | `0xFF02` |
+| Usage | `0x0002` |
+| Transaction family | `13 88 XX` |
+| Validated transaction | `13 88 08` |
+| Report size | `20 bytes` |
+| Report count | `8` |
+| Native stream size | `105 bytes` |
+| Native RGB groups | `6` |
+| Native LED entries | `81` |
+| Inter-report gap | `7 ms` |
+| Validated dynamic rate | `14 FPS` |
+
+More detailed wired protocol information is available in:
 
 ```text
 docs/protocol.md
 ```
 
-Reverse-engineering observations are documented in:
+Wired reverse-engineering observations are documented in:
 
 ```text
 docs/findings.md
+```
+
+Wireless protocol documentation is available in:
+
+```text
+2.4ghz/docs/protocol.md
+2.4ghz/docs/findings.md
 ```
 
 ---
@@ -611,13 +979,20 @@ docs/findings.md
 
 Contributions are welcome.
 
-The standalone RGB control and streaming API has been validated on the RK M75 and covered by automated regression tests. The API may continue to evolve as integration work begins.
+The wired RGB control and streaming API has been validated on the RK M75 and covered by automated regression tests.
+
+The 2.4 GHz wireless RGB path is also hardware validated at its current supported operating point, but the wireless protocol is still under active reverse engineering.
 
 Hardware testing is currently focused on the RK M75 with:
 
 ```text
+Wired:
 VID 0x258A
 PID 0x0163
+
+Wireless:
+VID 0x258A
+PID 0x0148
 ```
 
 Community testing of additional RK M75 units is especially welcome before OpenRGB and SignalRGB integration work begins.
@@ -629,5 +1004,3 @@ Contributions involving other RK devices should include hardware and protocol va
 # License
 
 MIT
-
-```
